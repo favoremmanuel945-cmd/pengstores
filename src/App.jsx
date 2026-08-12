@@ -11,6 +11,7 @@ import PaystackPop from '@paystack/inline-js'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import './App.css'
+import { supabase } from './supabase'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -822,14 +823,15 @@ function ProductCard({
 function Shop({
   addToCart,
   cartCount,
+  catalogProducts,
 }) {
   const [filter, setFilter] =
     useState('All')
 
   const visibleProducts =
     filter === 'All'
-      ? products
-      : products.filter(
+      ? catalogProducts
+      : catalogProducts.filter(
           (product) =>
             product.category === filter
         )
@@ -905,6 +907,7 @@ function Shop({
 function ShadesPage({
   addToCart,
   cartCount,
+  shadeProducts,
 }) {
   return (
     <div className="shop-page shades-collection-page">
@@ -930,7 +933,7 @@ function ShadesPage({
           layout
           className="product-grid shades-grid"
         >
-          {shadesProducts.map(
+          {shadeProducts.map(
             (product) => (
               <ProductCard
                 key={product.id}
@@ -950,6 +953,7 @@ function ShadesPage({
 function LipGlossPage({
   addToCart,
   cartCount,
+  glossProducts,
 }) {
   return (
     <div className="shop-page lip-gloss-collection-page">
@@ -977,7 +981,7 @@ function LipGlossPage({
           layout
           className="product-grid shades-grid"
         >
-          {lipGlossProducts.map(
+          {glossProducts.map(
             (product) => (
               <ProductCard
                 key={product.id}
@@ -1234,6 +1238,11 @@ function Checkout({
     setPaymentStarting,
   ] = useState(false)
 
+  const [
+    createdOrder,
+    setCreatedOrder,
+  ] = useState(null)
+
   const [form, setForm] =
     useState({
       fullName: '',
@@ -1286,41 +1295,106 @@ function Checkout({
     }))
   }
 
-  const handleSubmit = (
+  const createPendingOrder =
+    async () => {
+      if (createdOrder) {
+        return createdOrder
+      }
+
+      const deliveryAddress =
+        `${form.address}, ${form.city}, ${form.state}`
+
+      const items =
+        cart.map((item) => ({
+          product_id:
+            item.id,
+          quantity:
+            item.quantity,
+        }))
+
+      const { data, error } =
+        await supabase.rpc(
+          'create_order',
+          {
+            p_customer_name:
+              form.fullName,
+
+            p_customer_email:
+              form.email,
+
+            p_customer_phone:
+              form.phone,
+
+            p_delivery_address:
+              deliveryAddress,
+
+            p_order_note:
+              form.note,
+
+            p_items:
+              items,
+          }
+        )
+
+      if (error) {
+        console.error(
+          'Could not create order:',
+          error
+        )
+
+        throw new Error(
+          error.message ||
+            'Could not save your order.'
+        )
+      }
+
+      setCreatedOrder(data)
+
+      return data
+    }
+
+  const handleSubmit = async (
     event
   ) => {
     event.preventDefault()
 
     setPaymentError('')
-
-    const reference =
-      `PENG-${Date.now()}`
-
-    if (!paystackPublicKey) {
-      navigate(
-        `/order-confirmed?reference=${encodeURIComponent(
-          reference
-        )}`
-      )
-
-      return
-    }
-
-    if (
-      !paystackPublicKey.startsWith(
-        'pk_'
-      )
-    ) {
-      setPaymentError(
-        'The Paystack key configured for this website is invalid.'
-      )
-
-      return
-    }
-
     setPaymentStarting(true)
 
     try {
+      const order =
+        await createPendingOrder()
+
+      const reference =
+        order?.order_number ||
+        `PENG-${Date.now()}`
+
+      if (!paystackPublicKey) {
+        setPaymentStarting(false)
+
+        navigate(
+          `/order-confirmed?reference=${encodeURIComponent(
+            reference
+          )}`
+        )
+
+        return
+      }
+
+      if (
+        !paystackPublicKey.startsWith(
+          'pk_'
+        )
+      ) {
+        setPaymentStarting(false)
+
+        setPaymentError(
+          'The Paystack key configured for this website is invalid.'
+        )
+
+        return
+      }
+
       const popup =
         new PaystackPop()
 
@@ -1332,8 +1406,10 @@ function Checkout({
           form.email,
 
         amount:
-          grandTotal *
-          100,
+          Number(
+            order?.total ??
+            grandTotal
+          ) * 100,
 
         currency:
           'NGN',
@@ -1341,41 +1417,17 @@ function Checkout({
         reference,
 
         metadata: {
+          order_id:
+            order?.order_id,
+
+          order_number:
+            order?.order_number,
+
           customer_name:
             form.fullName,
 
           phone:
             form.phone,
-
-          delivery_address:
-            `${form.address}, ${form.city}, ${form.state}`,
-
-          order_note:
-            form.note,
-
-          cart_items:
-            cart.map(
-              (item) => ({
-                id:
-                  item.id,
-
-                name:
-                  item.name,
-
-                category:
-                  item.category,
-
-                quantity:
-                  item.quantity,
-
-                unit_price:
-                  item.price,
-
-                line_total:
-                  item.price *
-                  item.quantity,
-              })
-            ),
         },
 
         onSuccess:
@@ -1398,7 +1450,7 @@ function Checkout({
           )
 
           setPaymentError(
-            'Payment was cancelled. Your cart has not been changed.'
+            'Payment was cancelled. Your order is saved as pending and your cart has not been changed.'
           )
         },
 
@@ -1414,7 +1466,7 @@ function Checkout({
           )
 
           setPaymentError(
-            'Paystack could not start the payment. Please try again.'
+            'Paystack could not start the payment. Your order is saved as pending.'
           )
         },
       })
@@ -1428,7 +1480,8 @@ function Checkout({
       )
 
       setPaymentError(
-        'Something went wrong while opening Paystack.'
+        error.message ||
+        'We could not save your order. Please try again.'
       )
     }
   }
@@ -1694,7 +1747,7 @@ function Checkout({
               }
             >
               {paymentStarting
-                ? 'Opening Paystack...'
+                ? 'Saving Order...'
                 : paystackPublicKey
                 ? `Pay ₦${grandTotal.toLocaleString()} ↗`
                 : 'Place Order ↗'}
@@ -1824,9 +1877,9 @@ function Checkout({
             </div>
 
             <p className="secure-checkout-note">
-              Payment setup is still pending. The website will
-              automatically use Paystack once the store owner provides
-              their public key.
+              Your order details are securely saved before payment.
+              Online Paystack payment will activate once the store owner
+              provides their public key.
             </p>
           </aside>
         </div>
@@ -2246,9 +2299,9 @@ function OrderConfirmed({
         </h1>
 
         <p className="page-description">
-          Your order request has been recorded. Payment setup is
-          currently pending, so PENGSTORES will confirm the next
-          step with you.
+          Your order has been saved securely. Online payment is
+          currently pending setup, so PENGSTORES will confirm the
+          next step with you.
         </p>
 
         <a
@@ -2818,7 +2871,7 @@ function PlaceholderPage({
    PENG ASSIST SUPPORT BOT
 ========================================================= */
 
-function SupportBot({ cart, cartCount }) {
+function SupportBot({ cart, cartCount, catalogProducts }) {
   const welcomeMessage = {
     id: 1,
     role: 'assistant',
@@ -2857,6 +2910,23 @@ function SupportBot({ cart, cartCount }) {
 
   const messagesEndRef = useRef(null)
 
+  const botProducts =
+    catalogProducts?.length
+      ? catalogProducts
+      : products
+
+  const botShades =
+    botProducts.filter(
+      (product) =>
+        product.category === 'Shades'
+    )
+
+  const botGlosses =
+    botProducts.filter(
+      (product) =>
+        product.category === 'Lip Gloss'
+    )
+
   const cartSubtotal = cart.reduce(
     (total, item) =>
       total + item.price * item.quantity,
@@ -2888,7 +2958,7 @@ function SupportBot({ cart, cartCount }) {
   const findProduct = (question) => {
     const q = question.toLowerCase()
 
-    return products.find((product) =>
+    return botProducts.find((product) =>
       q.includes(product.name.toLowerCase())
     )
   }
@@ -3015,7 +3085,7 @@ function SupportBot({ cart, cartCount }) {
       q.includes('dark shades')
     ) {
       const blackShades =
-        shadesProducts.filter(
+        botShades.filter(
           (item) =>
             item.tone === 'black'
         )
@@ -3041,7 +3111,7 @@ function SupportBot({ cart, cartCount }) {
     ) {
       return {
         text:
-          `We currently have ${shadesProducts.length} shades in the collection. Prices are ₦7,000–₦8,000 depending on the style.`,
+          `We currently have ${botShades.length} shades in the collection. Prices are ₦7,000–₦8,000 depending on the style.`,
         action: {
           label: 'View Shades ↗',
           path: '/shades',
@@ -3056,7 +3126,7 @@ function SupportBot({ cart, cartCount }) {
     ) {
       return {
         text:
-          `We currently have ${lipGlossProducts.length} lip gloss options. Each gloss is ₦5,000.`,
+          `We currently have ${botGlosses.length} lip gloss options. Each gloss is ₦5,000.`,
         action: {
           label: 'View Lip Gloss ↗',
           path: '/lip-gloss',
@@ -3641,6 +3711,69 @@ const privacySections = [
 ========================================================= */
 
 function App() {
+  const [catalogProducts, setCatalogProducts] =
+    useState(products)
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadProducts = async () => {
+      const { data, error } =
+        await supabase
+          .from('products')
+          .select(
+            'id, name, category, price, image, tone, active'
+          )
+          .eq('active', true)
+          .order('id', {
+            ascending: true,
+          })
+
+      if (error) {
+        console.error(
+          'Could not load products from Supabase. Using local fallback catalog:',
+          error
+        )
+        return
+      }
+
+      if (
+        isMounted &&
+        Array.isArray(data) &&
+        data.length > 0
+      ) {
+        setCatalogProducts(
+          data.map((product) => ({
+            ...product,
+            price: Number(product.price),
+          }))
+        )
+
+        console.log(
+          `PENGSTORES catalog loaded from Supabase: ${data.length} products`
+        )
+      }
+    }
+
+    loadProducts()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  const liveShadeProducts =
+    catalogProducts.filter(
+      (product) =>
+        product.category === 'Shades'
+    )
+
+  const liveGlossProducts =
+    catalogProducts.filter(
+      (product) =>
+        product.category === 'Lip Gloss'
+    )
+
   const [cart, setCart] =
     useState(() => {
       try {
@@ -3820,6 +3953,9 @@ function App() {
             cartCount={
               cartCount
             }
+            catalogProducts={
+              catalogProducts
+            }
           />
         }
       />
@@ -3834,6 +3970,9 @@ function App() {
             cartCount={
               cartCount
             }
+            shadeProducts={
+              liveShadeProducts
+            }
           />
         }
       />
@@ -3847,6 +3986,9 @@ function App() {
             }
             cartCount={
               cartCount
+            }
+            glossProducts={
+              liveGlossProducts
             }
           />
         }
@@ -3988,6 +4130,9 @@ function App() {
       <SupportBot
         cart={cart}
         cartCount={cartCount}
+        catalogProducts={
+          catalogProducts
+        }
       />
     </>
   )
