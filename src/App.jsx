@@ -5,6 +5,7 @@ import {
   Link,
   Navigate,
   useNavigate,
+  useLocation,
 } from 'react-router-dom'
 import { motion } from 'motion/react'
 import PaystackPop from '@paystack/inline-js'
@@ -3706,11 +3707,1534 @@ const privacySections = [
 ]
 
 
+
+/* =========================================================
+   ADMIN LOGIN + DASHBOARD
+========================================================= */
+
+const ADMIN_STYLES = `
+  .peng-admin-shell {
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at top right, rgba(255, 88, 166, 0.18), transparent 36%),
+      linear-gradient(180deg, #fff8fb 0%, #ffffff 55%, #fff3f8 100%);
+    color: #24151d;
+    padding: 36px 18px 72px;
+  }
+
+  .peng-admin-wrap {
+    width: min(1180px, 100%);
+    margin: 0 auto;
+  }
+
+  .peng-admin-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 28px;
+  }
+
+  .peng-admin-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .peng-admin-brand img {
+    width: 92px;
+    max-height: 54px;
+    object-fit: contain;
+  }
+
+  .peng-admin-kicker {
+    margin: 0 0 4px;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #ad3d75;
+  }
+
+  .peng-admin-title {
+    margin: 0;
+    font-size: clamp(28px, 4vw, 46px);
+    line-height: 1;
+  }
+
+  .peng-admin-card {
+    background: rgba(255,255,255,.82);
+    border: 1px solid rgba(91, 30, 59, .10);
+    border-radius: 24px;
+    box-shadow: 0 24px 70px rgba(67, 22, 43, .08);
+    backdrop-filter: blur(18px);
+  }
+
+  .peng-admin-login-card {
+    width: min(520px, 100%);
+    margin: 8vh auto 0;
+    padding: 34px;
+  }
+
+  .peng-admin-field {
+    display: grid;
+    gap: 8px;
+    margin-top: 18px;
+  }
+
+  .peng-admin-field label {
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .peng-admin-field input,
+  .peng-admin-field select {
+    width: 100%;
+    border: 1px solid #ecd4df;
+    background: #fff;
+    color: #24151d;
+    border-radius: 14px;
+    padding: 13px 14px;
+    outline: none;
+  }
+
+  .peng-admin-field input:focus,
+  .peng-admin-field select:focus {
+    border-color: #e64d95;
+    box-shadow: 0 0 0 3px rgba(230,77,149,.11);
+  }
+
+  .peng-admin-primary,
+  .peng-admin-secondary,
+  .peng-admin-danger {
+    border: 0;
+    border-radius: 999px;
+    padding: 12px 18px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .peng-admin-primary {
+    background: linear-gradient(135deg, #f04492, #c82f79);
+    color: white;
+  }
+
+  .peng-admin-secondary {
+    background: #fff;
+    border: 1px solid #ead1dd;
+    color: #54243b;
+  }
+
+  .peng-admin-danger {
+    background: #321823;
+    color: #fff;
+  }
+
+  .peng-admin-primary:disabled,
+  .peng-admin-secondary:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+  }
+
+  .peng-admin-error {
+    margin-top: 16px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: #fff0f3;
+    color: #a32650;
+    font-size: 13px;
+  }
+
+  .peng-admin-success {
+    margin-top: 16px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: #effbf4;
+    color: #23633f;
+    font-size: 13px;
+  }
+
+  .peng-admin-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 22px;
+  }
+
+  .peng-admin-stat {
+    padding: 20px;
+  }
+
+  .peng-admin-stat span {
+    display: block;
+    font-size: 11px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: #9a7185;
+  }
+
+  .peng-admin-stat strong {
+    display: block;
+    margin-top: 8px;
+    font-size: 28px;
+  }
+
+  .peng-admin-tabs {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 18px 0 24px;
+  }
+
+  .peng-admin-tab {
+    border: 1px solid #ead1dd;
+    background: rgba(255,255,255,.78);
+    color: #5b2a42;
+    border-radius: 999px;
+    padding: 10px 16px;
+    cursor: pointer;
+    font-weight: 800;
+  }
+
+  .peng-admin-tab.active {
+    background: #2f1722;
+    color: white;
+    border-color: #2f1722;
+  }
+
+  .peng-admin-grid {
+    display: grid;
+    gap: 16px;
+  }
+
+  .peng-admin-order {
+    padding: 22px;
+  }
+
+  .peng-admin-order-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+
+  .peng-admin-order-number {
+    font-weight: 900;
+    font-size: 18px;
+  }
+
+  .peng-admin-muted {
+    color: #826477;
+    font-size: 13px;
+  }
+
+  .peng-admin-order-meta {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 18px;
+  }
+
+  .peng-admin-meta-box {
+    background: #fff8fb;
+    border-radius: 14px;
+    padding: 12px;
+  }
+
+  .peng-admin-meta-box small {
+    display: block;
+    color: #9a7185;
+    margin-bottom: 5px;
+  }
+
+  .peng-admin-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 10px;
+    align-items: end;
+    margin-top: 18px;
+  }
+
+  .peng-admin-items {
+    margin-top: 16px;
+    border-top: 1px solid #f0dce5;
+    padding-top: 14px;
+  }
+
+  .peng-admin-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 0;
+    font-size: 13px;
+  }
+
+  .peng-admin-products {
+    overflow-x: auto;
+  }
+
+  .peng-admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 820px;
+  }
+
+  .peng-admin-table th,
+  .peng-admin-table td {
+    text-align: left;
+    padding: 14px 12px;
+    border-bottom: 1px solid #f1dde6;
+    vertical-align: middle;
+  }
+
+  .peng-admin-table th {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: #8f667a;
+  }
+
+  .peng-admin-table input {
+    width: 92px;
+    border: 1px solid #ead1dd;
+    border-radius: 10px;
+    padding: 8px;
+  }
+
+  .peng-admin-product-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 190px;
+  }
+
+  .peng-admin-product-name img {
+    width: 46px;
+    height: 46px;
+    object-fit: cover;
+    border-radius: 10px;
+    background: #fff4f8;
+  }
+
+  .peng-admin-empty {
+    padding: 42px;
+    text-align: center;
+    color: #806072;
+  }
+
+  @media (max-width: 820px) {
+    .peng-admin-stats {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .peng-admin-order-meta {
+      grid-template-columns: 1fr;
+    }
+
+    .peng-admin-actions {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .peng-admin-shell {
+      padding-inline: 12px;
+    }
+
+    .peng-admin-login-card {
+      padding: 24px;
+    }
+
+    .peng-admin-topbar {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+  }
+`
+
+function AdminLogin() {
+  const navigate = useNavigate()
+
+  const [email, setEmail] =
+    useState('')
+
+  const [password, setPassword] =
+    useState('')
+
+  const [loading, setLoading] =
+    useState(false)
+
+  const [errorMessage, setErrorMessage] =
+    useState('')
+
+  useEffect(() => {
+    let mounted = true
+
+    const checkExistingSession =
+      async () => {
+        const {
+          data: { session },
+        } =
+          await supabase.auth.getSession()
+
+        if (!mounted || !session) {
+          return
+        }
+
+        const { data: adminRecord } =
+          await supabase
+            .from('admin_users')
+            .select('user_id')
+            .eq(
+              'user_id',
+              session.user.id
+            )
+            .maybeSingle()
+
+        if (
+          mounted &&
+          adminRecord
+        ) {
+          navigate(
+            '/admin/dashboard',
+            {
+              replace: true,
+            }
+          )
+        }
+      }
+
+    checkExistingSession()
+
+    return () => {
+      mounted = false
+    }
+  }, [navigate])
+
+  const handleAdminLogin =
+    async (event) => {
+      event.preventDefault()
+
+      setErrorMessage('')
+      setLoading(true)
+
+      const {
+        data,
+        error,
+      } =
+        await supabase.auth
+          .signInWithPassword({
+            email:
+              email.trim(),
+            password,
+          })
+
+      if (error) {
+        setLoading(false)
+        setErrorMessage(
+          'The email or password is incorrect.'
+        )
+        return
+      }
+
+      const userId =
+        data.user?.id
+
+      const {
+        data: adminRecord,
+        error: adminError,
+      } =
+        await supabase
+          .from('admin_users')
+          .select('user_id')
+          .eq(
+            'user_id',
+            userId
+          )
+          .maybeSingle()
+
+      if (
+        adminError ||
+        !adminRecord
+      ) {
+        await supabase.auth.signOut()
+
+        setLoading(false)
+        setErrorMessage(
+          'This account is not authorised to access the PENGSTORES admin dashboard.'
+        )
+
+        return
+      }
+
+      setLoading(false)
+
+      navigate(
+        '/admin/dashboard',
+        {
+          replace: true,
+        }
+      )
+    }
+
+  return (
+    <div className="peng-admin-shell">
+      <style>{ADMIN_STYLES}</style>
+
+      <div className="peng-admin-wrap">
+        <div className="peng-admin-login-card peng-admin-card">
+          <div className="peng-admin-brand">
+            <img
+              src="/Brand/pengstore-logo.png"
+              alt="PENGSTORES"
+            />
+
+            <div>
+              <p className="peng-admin-kicker">
+                Secure management
+              </p>
+
+              <h1 className="peng-admin-title">
+                Admin login
+              </h1>
+            </div>
+          </div>
+
+          <p className="peng-admin-muted">
+            Sign in with the authorised store administrator account.
+          </p>
+
+          <form
+            onSubmit={
+              handleAdminLogin
+            }
+          >
+            <div className="peng-admin-field">
+              <label htmlFor="admin-email">
+                Email address
+              </label>
+
+              <input
+                id="admin-email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(event) =>
+                  setEmail(
+                    event.target.value
+                  )
+                }
+              />
+            </div>
+
+            <div className="peng-admin-field">
+              <label htmlFor="admin-password">
+                Password
+              </label>
+
+              <input
+                id="admin-password"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(event) =>
+                  setPassword(
+                    event.target.value
+                  )
+                }
+              />
+            </div>
+
+            {errorMessage && (
+              <div className="peng-admin-error">
+                {errorMessage}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="peng-admin-primary"
+              disabled={loading}
+              style={{
+                width: '100%',
+                marginTop: 22,
+              }}
+            >
+              {loading
+                ? 'Signing in...'
+                : 'Open Dashboard →'}
+            </button>
+          </form>
+
+          <Link
+            to="/"
+            className="peng-admin-muted"
+            style={{
+              display: 'inline-block',
+              marginTop: 18,
+            }}
+          >
+            ← Back to storefront
+          </Link>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AdminDashboard() {
+  const navigate = useNavigate()
+
+  const [checkingAccess, setCheckingAccess] =
+    useState(true)
+
+  const [isAdmin, setIsAdmin] =
+    useState(false)
+
+  const [activeTab, setActiveTab] =
+    useState('orders')
+
+  const [orders, setOrders] =
+    useState([])
+
+  const [orderItems, setOrderItems] =
+    useState([])
+
+  const [adminProducts, setAdminProducts] =
+    useState([])
+
+  const [loadingData, setLoadingData] =
+    useState(true)
+
+  const [feedback, setFeedback] =
+    useState('')
+
+  const [errorMessage, setErrorMessage] =
+    useState('')
+
+  const verifyAdmin =
+    async () => {
+      const {
+        data: { session },
+      } =
+        await supabase.auth.getSession()
+
+      if (!session) {
+        setCheckingAccess(false)
+        setIsAdmin(false)
+        return false
+      }
+
+      const {
+        data: adminRecord,
+      } =
+        await supabase
+          .from('admin_users')
+          .select('user_id')
+          .eq(
+            'user_id',
+            session.user.id
+          )
+          .maybeSingle()
+
+      const authorised =
+        Boolean(adminRecord)
+
+      setCheckingAccess(false)
+      setIsAdmin(authorised)
+
+      return authorised
+    }
+
+  const loadAdminData =
+    async () => {
+      setLoadingData(true)
+      setErrorMessage('')
+
+      const [
+        ordersResponse,
+        itemsResponse,
+        productsResponse,
+      ] =
+        await Promise.all([
+          supabase
+            .from('orders')
+            .select(
+              'id, order_number, customer_name, customer_email, customer_phone, delivery_address, order_note, subtotal, delivery_fee, total, payment_status, order_status, paystack_reference, created_at, updated_at'
+            )
+            .order(
+              'created_at',
+              {
+                ascending:
+                  false,
+              }
+            ),
+
+          supabase
+            .from('order_items')
+            .select(
+              'id, order_id, product_id, product_name, unit_price, quantity, created_at'
+            )
+            .order(
+              'created_at',
+              {
+                ascending:
+                  true,
+              }
+            ),
+
+          supabase
+            .from('products')
+            .select(
+              'id, name, category, price, image, tone, stock_quantity, active, created_at'
+            )
+            .order('id', {
+              ascending: true,
+            }),
+        ])
+
+      const firstError =
+        ordersResponse.error ||
+        itemsResponse.error ||
+        productsResponse.error
+
+      if (firstError) {
+        console.error(
+          'Admin dashboard load failed:',
+          firstError
+        )
+
+        setErrorMessage(
+          firstError.message ||
+          'Could not load the admin dashboard.'
+        )
+
+        setLoadingData(false)
+        return
+      }
+
+      setOrders(
+        ordersResponse.data || []
+      )
+
+      setOrderItems(
+        itemsResponse.data || []
+      )
+
+      setAdminProducts(
+        (productsResponse.data || [])
+          .map((product) => ({
+            ...product,
+            price:
+              Number(
+                product.price
+              ),
+            stock_quantity:
+              Number(
+                product.stock_quantity
+              ),
+          }))
+      )
+
+      setLoadingData(false)
+    }
+
+  useEffect(() => {
+    let mounted = true
+
+    const start =
+      async () => {
+        const authorised =
+          await verifyAdmin()
+
+        if (
+          mounted &&
+          authorised
+        ) {
+          await loadAdminData()
+        }
+      }
+
+    start()
+
+    const {
+      data: authListener,
+    } =
+      supabase.auth
+        .onAuthStateChange(
+          (event) => {
+            if (
+              event ===
+              'SIGNED_OUT'
+            ) {
+              navigate(
+                '/admin',
+                {
+                  replace: true,
+                }
+              )
+            }
+          }
+        )
+
+    return () => {
+      mounted = false
+
+      authListener
+        .subscription
+        .unsubscribe()
+    }
+  }, [navigate])
+
+  const handleLogout =
+    async () => {
+      await supabase.auth.signOut()
+
+      navigate(
+        '/admin',
+        {
+          replace: true,
+        }
+      )
+    }
+
+  const updateOrder =
+    async (
+      orderId,
+      changes
+    ) => {
+      setFeedback('')
+      setErrorMessage('')
+
+      const { error } =
+        await supabase
+          .from('orders')
+          .update(changes)
+          .eq(
+            'id',
+            orderId
+          )
+
+      if (error) {
+        setErrorMessage(
+          error.message
+        )
+        return
+      }
+
+      setOrders(
+        (current) =>
+          current.map(
+            (order) =>
+              order.id ===
+              orderId
+                ? {
+                    ...order,
+                    ...changes,
+                  }
+                : order
+          )
+      )
+
+      setFeedback(
+        'Order updated successfully.'
+      )
+    }
+
+  const updateProduct =
+    async (
+      productId,
+      changes
+    ) => {
+      setFeedback('')
+      setErrorMessage('')
+
+      const { error } =
+        await supabase
+          .from('products')
+          .update(changes)
+          .eq(
+            'id',
+            productId
+          )
+
+      if (error) {
+        setErrorMessage(
+          error.message
+        )
+        return
+      }
+
+      setAdminProducts(
+        (current) =>
+          current.map(
+            (product) =>
+              product.id ===
+              productId
+                ? {
+                    ...product,
+                    ...changes,
+                  }
+                : product
+          )
+      )
+
+      setFeedback(
+        'Product updated successfully.'
+      )
+    }
+
+  if (checkingAccess) {
+    return (
+      <div className="peng-admin-shell">
+        <style>{ADMIN_STYLES}</style>
+
+        <div className="peng-admin-wrap">
+          <div className="peng-admin-card peng-admin-empty">
+            Checking administrator access...
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!isAdmin) {
+    return (
+      <Navigate
+        to="/admin"
+        replace
+      />
+    )
+  }
+
+  const pendingOrders =
+    orders.filter(
+      (order) =>
+        order.order_status ===
+        'pending'
+    ).length
+
+  const paidOrders =
+    orders.filter(
+      (order) =>
+        order.payment_status ===
+        'paid'
+    ).length
+
+  const lowStockProducts =
+    adminProducts.filter(
+      (product) =>
+        product.stock_quantity <=
+        5
+    ).length
+
+  return (
+    <div className="peng-admin-shell">
+      <style>{ADMIN_STYLES}</style>
+
+      <div className="peng-admin-wrap">
+        <div className="peng-admin-topbar">
+          <div className="peng-admin-brand">
+            <img
+              src="/Brand/pengstore-logo.png"
+              alt="PENGSTORES"
+            />
+
+            <div>
+              <p className="peng-admin-kicker">
+                Store management
+              </p>
+
+              <h1 className="peng-admin-title">
+                PENG Control
+              </h1>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              gap: 10,
+              flexWrap: 'wrap',
+            }}
+          >
+            <Link
+              to="/"
+              className="peng-admin-secondary"
+              style={{
+                textDecoration:
+                  'none',
+              }}
+            >
+              View Store ↗
+            </Link>
+
+            <button
+              type="button"
+              className="peng-admin-danger"
+              onClick={
+                handleLogout
+              }
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+
+        <div className="peng-admin-stats">
+          <div className="peng-admin-card peng-admin-stat">
+            <span>
+              Total orders
+            </span>
+            <strong>
+              {orders.length}
+            </strong>
+          </div>
+
+          <div className="peng-admin-card peng-admin-stat">
+            <span>
+              Pending
+            </span>
+            <strong>
+              {pendingOrders}
+            </strong>
+          </div>
+
+          <div className="peng-admin-card peng-admin-stat">
+            <span>
+              Paid
+            </span>
+            <strong>
+              {paidOrders}
+            </strong>
+          </div>
+
+          <div className="peng-admin-card peng-admin-stat">
+            <span>
+              Low stock
+            </span>
+            <strong>
+              {lowStockProducts}
+            </strong>
+          </div>
+        </div>
+
+        <div className="peng-admin-tabs">
+          <button
+            type="button"
+            className={
+              activeTab ===
+              'orders'
+                ? 'peng-admin-tab active'
+                : 'peng-admin-tab'
+            }
+            onClick={() =>
+              setActiveTab(
+                'orders'
+              )
+            }
+          >
+            Orders
+          </button>
+
+          <button
+            type="button"
+            className={
+              activeTab ===
+              'products'
+                ? 'peng-admin-tab active'
+                : 'peng-admin-tab'
+            }
+            onClick={() =>
+              setActiveTab(
+                'products'
+              )
+            }
+          >
+            Products & Stock
+          </button>
+
+          <button
+            type="button"
+            className="peng-admin-tab"
+            onClick={
+              loadAdminData
+            }
+          >
+            Refresh ↻
+          </button>
+        </div>
+
+        {feedback && (
+          <div className="peng-admin-success">
+            {feedback}
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="peng-admin-error">
+            {errorMessage}
+          </div>
+        )}
+
+        {loadingData ? (
+          <div className="peng-admin-card peng-admin-empty">
+            Loading store data...
+          </div>
+        ) : activeTab === 'orders' ? (
+          <div className="peng-admin-grid">
+            {orders.length === 0 ? (
+              <div className="peng-admin-card peng-admin-empty">
+                No orders yet.
+              </div>
+            ) : (
+              orders.map(
+                (order) => {
+                  const items =
+                    orderItems.filter(
+                      (item) =>
+                        item.order_id ===
+                        order.id
+                    )
+
+                  return (
+                    <div
+                      key={
+                        order.id
+                      }
+                      className="peng-admin-card peng-admin-order"
+                    >
+                      <div className="peng-admin-order-head">
+                        <div>
+                          <div className="peng-admin-order-number">
+                            {
+                              order.order_number
+                            }
+                          </div>
+
+                          <div className="peng-admin-muted">
+                            {new Date(
+                              order.created_at
+                            ).toLocaleString()}
+                          </div>
+                        </div>
+
+                        <div>
+                          <strong>
+                            ₦
+                            {Number(
+                              order.total
+                            ).toLocaleString()}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <div className="peng-admin-order-meta">
+                        <div className="peng-admin-meta-box">
+                          <small>
+                            Customer
+                          </small>
+
+                          <strong>
+                            {
+                              order.customer_name
+                            }
+                          </strong>
+
+                          <div className="peng-admin-muted">
+                            {
+                              order.customer_email
+                            }
+                          </div>
+
+                          <div className="peng-admin-muted">
+                            {
+                              order.customer_phone
+                            }
+                          </div>
+                        </div>
+
+                        <div className="peng-admin-meta-box">
+                          <small>
+                            Delivery
+                          </small>
+
+                          <div>
+                            {
+                              order.delivery_address
+                            }
+                          </div>
+
+                          {order.order_note && (
+                            <div className="peng-admin-muted">
+                              Note:{' '}
+                              {
+                                order.order_note
+                              }
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="peng-admin-meta-box">
+                          <small>
+                            Payment
+                          </small>
+
+                          <div>
+                            {
+                              order.payment_status
+                            }
+                          </div>
+
+                          <div className="peng-admin-muted">
+                            Ref:{' '}
+                            {order.paystack_reference ||
+                              'Not available'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="peng-admin-items">
+                        <strong>
+                          Items
+                        </strong>
+
+                        {items.map(
+                          (item) => (
+                            <div
+                              key={
+                                item.id
+                              }
+                              className="peng-admin-item"
+                            >
+                              <span>
+                                {
+                                  item.product_name
+                                }{' '}
+                                ×{' '}
+                                {
+                                  item.quantity
+                                }
+                              </span>
+
+                              <span>
+                                ₦
+                                {(
+                                  Number(
+                                    item.unit_price
+                                  ) *
+                                  item.quantity
+                                ).toLocaleString()}
+                              </span>
+                            </div>
+                          )
+                        )}
+                      </div>
+
+                      <div className="peng-admin-actions">
+                        <div className="peng-admin-field">
+                          <label>
+                            Order status
+                          </label>
+
+                          <select
+                            value={
+                              order.order_status
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              updateOrder(
+                                order.id,
+                                {
+                                  order_status:
+                                    event
+                                      .target
+                                      .value,
+                                }
+                              )
+                            }
+                          >
+                            <option value="pending">
+                              Pending
+                            </option>
+                            <option value="confirmed">
+                              Confirmed
+                            </option>
+                            <option value="processing">
+                              Processing
+                            </option>
+                            <option value="shipped">
+                              Shipped
+                            </option>
+                            <option value="delivered">
+                              Delivered
+                            </option>
+                            <option value="cancelled">
+                              Cancelled
+                            </option>
+                          </select>
+                        </div>
+
+                        <div className="peng-admin-field">
+                          <label>
+                            Payment status
+                          </label>
+
+                          <select
+                            value={
+                              order.payment_status
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              updateOrder(
+                                order.id,
+                                {
+                                  payment_status:
+                                    event
+                                      .target
+                                      .value,
+                                }
+                              )
+                            }
+                          >
+                            <option value="pending">
+                              Pending
+                            </option>
+                            <option value="paid">
+                              Paid
+                            </option>
+                            <option value="failed">
+                              Failed
+                            </option>
+                            <option value="refunded">
+                              Refunded
+                            </option>
+                          </select>
+                        </div>
+
+                        <a
+                          className="peng-admin-primary"
+                          href={`https://wa.me/${'2349011756093'}?text=${encodeURIComponent(
+                            `Hello ${order.customer_name}, this is PENGSTORES regarding order ${order.order_number}.`
+                          )}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            textDecoration:
+                              'none',
+                            textAlign:
+                              'center',
+                          }}
+                        >
+                          WhatsApp
+                        </a>
+                      </div>
+                    </div>
+                  )
+                }
+              )
+            )}
+          </div>
+        ) : (
+          <div className="peng-admin-card peng-admin-products">
+            <table className="peng-admin-table">
+              <thead>
+                <tr>
+                  <th>
+                    Product
+                  </th>
+                  <th>
+                    Category
+                  </th>
+                  <th>
+                    Price
+                  </th>
+                  <th>
+                    Stock
+                  </th>
+                  <th>
+                    Active
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {adminProducts.map(
+                  (product) => (
+                    <tr
+                      key={
+                        product.id
+                      }
+                    >
+                      <td>
+                        <div className="peng-admin-product-name">
+                          <img
+                            src={
+                              product.image
+                            }
+                            alt=""
+                          />
+
+                          <strong>
+                            {
+                              product.name
+                            }
+                          </strong>
+                        </div>
+                      </td>
+
+                      <td>
+                        {
+                          product.category
+                        }
+                      </td>
+
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          step="100"
+                          value={
+                            product.price
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setAdminProducts(
+                              (
+                                current
+                              ) =>
+                                current.map(
+                                  (
+                                    item
+                                  ) =>
+                                    item.id ===
+                                    product.id
+                                      ? {
+                                          ...item,
+                                          price:
+                                            Number(
+                                              event
+                                                .target
+                                                .value
+                                            ),
+                                        }
+                                      : item
+                                )
+                            )
+                          }
+                          onBlur={() =>
+                            updateProduct(
+                              product.id,
+                              {
+                                price:
+                                  Number(
+                                    product.price
+                                  ),
+                              }
+                            )
+                          }
+                        />
+                      </td>
+
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          max="9999"
+                          value={
+                            product.stock_quantity
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setAdminProducts(
+                              (
+                                current
+                              ) =>
+                                current.map(
+                                  (
+                                    item
+                                  ) =>
+                                    item.id ===
+                                    product.id
+                                      ? {
+                                          ...item,
+                                          stock_quantity:
+                                            Number(
+                                              event
+                                                .target
+                                                .value
+                                            ),
+                                        }
+                                      : item
+                                )
+                            )
+                          }
+                          onBlur={() =>
+                            updateProduct(
+                              product.id,
+                              {
+                                stock_quantity:
+                                  Number(
+                                    product.stock_quantity
+                                  ),
+                              }
+                            )
+                          }
+                        />
+                      </td>
+
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={
+                            product.active
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            updateProduct(
+                              product.id,
+                              {
+                                active:
+                                  event
+                                    .target
+                                    .checked,
+                              }
+                            )
+                          }
+                        />
+                      </td>
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+
 /* =========================================================
    APP + CART LOGIC
 ========================================================= */
 
 function App() {
+  const location =
+    useLocation()
+
+  const isAdminRoute =
+    location.pathname.startsWith(
+      '/admin'
+    )
+
   const [catalogProducts, setCatalogProducts] =
     useState(products)
 
@@ -3995,6 +5519,20 @@ function App() {
       />
 
       <Route
+        path="/admin"
+        element={
+          <AdminLogin />
+        }
+      />
+
+      <Route
+        path="/admin/dashboard"
+        element={
+          <AdminDashboard />
+        }
+      />
+
+      <Route
         path="/about"
         element={
           <AboutPage
@@ -4125,15 +5663,19 @@ function App() {
 
       </Routes>
 
-      <SiteFooter />
+      {!isAdminRoute && (
+        <>
+          <SiteFooter />
 
-      <SupportBot
-        cart={cart}
-        cartCount={cartCount}
-        catalogProducts={
-          catalogProducts
-        }
-      />
+          <SupportBot
+            cart={cart}
+            cartCount={cartCount}
+            catalogProducts={
+              catalogProducts
+            }
+          />
+        </>
+      )}
     </>
   )
 }
