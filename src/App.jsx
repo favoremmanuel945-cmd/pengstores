@@ -3642,7 +3642,48 @@ const privacySections = [
 
 function App() {
   const [cart, setCart] =
-    useState([])
+    useState(() => {
+      try {
+        const savedCart =
+          localStorage.getItem(
+            'pengstores-cart'
+          )
+
+        if (savedCart) {
+          const parsedCart =
+            JSON.parse(savedCart)
+
+          if (
+            Array.isArray(
+              parsedCart
+            )
+          ) {
+            return parsedCart
+          }
+        }
+      } catch (error) {
+        console.error(
+          'Could not load saved cart:',
+          error
+        )
+      }
+
+      return []
+    })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        'pengstores-cart',
+        JSON.stringify(cart)
+      )
+    } catch (error) {
+      console.error(
+        'Could not save cart:',
+        error
+      )
+    }
+  }, [cart])
 
   const addToCart = (
     product
