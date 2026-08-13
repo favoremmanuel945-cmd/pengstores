@@ -215,6 +215,111 @@ const products = [
    NAVBAR
 ========================================================= */
 
+
+const getPreferredTheme = () => {
+  try {
+    const savedTheme =
+      localStorage.getItem(
+        'pengstores-theme'
+      )
+
+    if (
+      savedTheme === 'light' ||
+      savedTheme === 'dark'
+    ) {
+      return savedTheme
+    }
+  } catch (error) {
+    console.error(
+      'Could not read saved theme:',
+      error
+    )
+  }
+
+  return window.matchMedia?.(
+    '(prefers-color-scheme: dark)'
+  ).matches
+    ? 'dark'
+    : 'light'
+}
+
+function ThemeToggle() {
+  const [theme, setTheme] =
+    useState(
+      getPreferredTheme
+    )
+
+  useEffect(() => {
+    document.documentElement
+      .setAttribute(
+        'data-theme',
+        theme
+      )
+
+    document.documentElement
+      .style.colorScheme =
+        theme
+
+    try {
+      localStorage.setItem(
+        'pengstores-theme',
+        theme
+      )
+    } catch (error) {
+      console.error(
+        'Could not save theme:',
+        error
+      )
+    }
+  }, [theme])
+
+  const isDark =
+    theme === 'dark'
+
+  return (
+    <motion.button
+      type="button"
+      className="theme-toggle"
+      onClick={() =>
+        setTheme(
+          isDark
+            ? 'light'
+            : 'dark'
+        )
+      }
+      whileHover={{
+        scale: 1.05,
+      }}
+      whileTap={{
+        scale: 0.95,
+      }}
+      aria-label={
+        isDark
+          ? 'Switch to light mode'
+          : 'Switch to dark mode'
+      }
+      title={
+        isDark
+          ? 'Switch to light mode'
+          : 'Switch to dark mode'
+      }
+    >
+      <span
+        className="theme-toggle-icon"
+        aria-hidden="true"
+      >
+        {isDark ? '☀' : '☾'}
+      </span>
+
+      <span className="theme-toggle-label">
+        {isDark
+          ? 'Light'
+          : 'Dark'}
+      </span>
+    </motion.button>
+  )
+}
+
 function Navbar({ cartCount = 0 }) {
   return (
     <motion.nav
@@ -258,15 +363,19 @@ function Navbar({ cartCount = 0 }) {
         ))}
       </div>
 
-      <Link to="/cart">
-        <motion.button
-          className="nav-button"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          Cart {cartCount > 0 ? `(${cartCount})` : ''}
-        </motion.button>
-      </Link>
+      <div className="nav-actions">
+        <ThemeToggle />
+
+        <Link to="/cart">
+          <motion.button
+            className="nav-button"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            Cart {cartCount > 0 ? `(${cartCount})` : ''}
+          </motion.button>
+        </Link>
+      </div>
     </motion.nav>
   )
 }
@@ -7197,6 +7306,21 @@ function AdminDashboard() {
 function App() {
   const location =
     useLocation()
+
+  useEffect(() => {
+    const initialTheme =
+      getPreferredTheme()
+
+    document.documentElement
+      .setAttribute(
+        'data-theme',
+        initialTheme
+      )
+
+    document.documentElement
+      .style.colorScheme =
+        initialTheme
+  }, [])
 
   const isAdminRoute =
     location.pathname.startsWith(
