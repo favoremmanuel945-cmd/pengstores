@@ -762,6 +762,12 @@ function ProductCard({
   product,
   addToCart,
 }) {
+  const stock =
+    Number(product.stock_quantity ?? 0)
+
+  const outOfStock =
+    !product.active || stock <= 0
+
   return (
     <motion.article
       layout
@@ -797,9 +803,30 @@ function ProductCard({
           </h3>
         </div>
 
-        <strong>
-          ₦{product.price.toLocaleString()}
-        </strong>
+        <div>
+          <strong>
+            ₦{product.price.toLocaleString()}
+          </strong>
+
+          <p
+            style={{
+              margin: '6px 0 0',
+              fontSize: '12px',
+              fontWeight: 800,
+              color: outOfStock
+                ? '#a32650'
+                : stock <= 5
+                ? '#a96816'
+                : '#356b4d',
+            }}
+          >
+            {outOfStock
+              ? 'Out of Stock'
+              : stock <= 5
+              ? `Only ${stock} left`
+              : 'In Stock'}
+          </p>
+        </div>
       </div>
 
       <motion.button
@@ -810,8 +837,17 @@ function ProductCard({
         onClick={() =>
           addToCart(product)
         }
+        disabled={outOfStock}
+        style={{
+          opacity: outOfStock ? 0.5 : 1,
+          cursor: outOfStock
+            ? 'not-allowed'
+            : 'pointer',
+        }}
       >
-        Add to Cart +
+        {outOfStock
+          ? 'Out of Stock'
+          : 'Add to Cart +'}
       </motion.button>
     </motion.article>
   )
@@ -1127,7 +1163,9 @@ function Cart({
                         }
                         disabled={
                           item.quantity >=
-                          10
+                          Number(
+                            item.stock_quantity ?? 0
+                          )
                         }
                       >
                         +
@@ -1296,6 +1334,85 @@ function Checkout({
     }))
   }
 
+  const validateCartStock =
+    async () => {
+      const productIds =
+        cart.map((item) => item.id)
+
+      const {
+        data: liveProducts,
+        error,
+      } =
+        await supabase
+          .from('products')
+          .select(
+            'id, name, price, stock_quantity, active'
+          )
+          .in('id', productIds)
+
+      if (error) {
+        throw new Error(
+          'We could not verify product availability. Please try again.'
+        )
+      }
+
+      const liveById =
+        new Map(
+          (liveProducts || []).map(
+            (product) => [
+              Number(product.id),
+              product,
+            ]
+          )
+        )
+
+      for (const item of cart) {
+        const live =
+          liveById.get(
+            Number(item.id)
+          )
+
+        if (!live || !live.active) {
+          throw new Error(
+            `${item.name} is no longer available. Please remove it from your cart.`
+          )
+        }
+
+        const available =
+          Number(
+            live.stock_quantity ?? 0
+          )
+
+        if (available <= 0) {
+          throw new Error(
+            `${item.name} is now out of stock. Please remove it from your cart.`
+          )
+        }
+
+        if (
+          Number(item.quantity) >
+          available
+        ) {
+          throw new Error(
+            `Only ${available} ${item.name} ${
+              available === 1
+                ? 'is'
+                : 'are'
+            } currently available. Please reduce the quantity in your cart.`
+          )
+        }
+
+        if (
+          Number(item.price) !==
+          Number(live.price)
+        ) {
+          throw new Error(
+            `The price of ${item.name} has changed. Please return to your cart and add the product again.`
+          )
+        }
+      }
+    }
+
   const createPendingOrder =
     async () => {
       if (createdOrder) {
@@ -1363,6 +1480,8 @@ function Checkout({
     setPaymentStarting(true)
 
     try {
+      await validateCartStock()
+
       const order =
         await createPendingOrder()
 
@@ -5246,7 +5365,7 @@ function App() {
         await supabase
           .from('products')
           .select(
-            'id, name, category, price, image, tone, active'
+            'id, name, category, price, image, tone, stock_quantity, active'
           )
           .eq('active', true)
           .order('id', {
@@ -5345,6 +5464,21 @@ function App() {
   const addToCart = (
     product
   ) => {
+    const available =
+      Number(
+        product.stock_quantity ?? 0
+      )
+
+    if (
+      !product.active ||
+      available <= 0
+    ) {
+      window.alert(
+        `${product.name} is currently out of stock.`
+      )
+      return
+    }
+
     setCart(
       (currentCart) => {
         const existingItem =
@@ -5355,8 +5489,21 @@ function App() {
           )
 
         if (
-          existingItem
+          existingItem &&
+          existingItem.quantity >=
+            available
         ) {
+          window.alert(
+            `Only ${available} ${product.name} ${
+              available === 1
+                ? 'is'
+                : 'are'
+            } currently available.`
+          )
+          return currentCart
+        }
+
+        if (existingItem) {
           return currentCart.map(
             (item) =>
               item.id ===
@@ -5364,11 +5511,12 @@ function App() {
                 ? {
                     ...item,
                     quantity:
-                      Math.min(
-                        item.quantity +
-                          1,
-                        10
-                      ),
+                      item.quantity +
+                      1,
+                    stock_quantity:
+                      available,
+                    active:
+                      product.active,
                   }
                 : item
           )
@@ -5379,6 +5527,8 @@ function App() {
           {
             ...product,
             quantity: 1,
+            stock_quantity:
+              available,
           },
         ]
       }
@@ -5391,19 +5541,39 @@ function App() {
     setCart(
       (currentCart) =>
         currentCart.map(
-          (item) =>
-            item.id ===
-            productId
-              ? {
-                  ...item,
-                  quantity:
-                    Math.min(
-                      item.quantity +
-                        1,
-                      10
-                    ),
-                }
-              : item
+          (item) => {
+            if (
+              item.id !==
+              productId
+            ) {
+              return item
+            }
+
+            const available =
+              Number(
+                item.stock_quantity ?? 0
+              )
+
+            if (
+              item.quantity >=
+              available
+            ) {
+              window.alert(
+                `Only ${available} ${item.name} ${
+                  available === 1
+                    ? 'is'
+                    : 'are'
+                } currently available.`
+              )
+              return item
+            }
+
+            return {
+              ...item,
+              quantity:
+                item.quantity + 1,
+            }
+          }
         )
     )
   }
