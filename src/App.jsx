@@ -1282,6 +1282,16 @@ function Checkout({
     setCreatedOrder,
   ] = useState(null)
 
+  const [
+    deliveryZones,
+    setDeliveryZones,
+  ] = useState([])
+
+  const [
+    selectedDeliveryZoneId,
+    setSelectedDeliveryZoneId,
+  ] = useState('')
+
   const [form, setForm] =
     useState({
       fullName: '',
@@ -1302,14 +1312,89 @@ function Checkout({
       0
     )
 
-  const deliveryFee = 0
-
-  const grandTotal =
-    subtotal + deliveryFee
-
   const paystackPublicKey =
     import.meta.env
       .VITE_PAYSTACK_PUBLIC_KEY
+
+  useEffect(() => {
+    let mounted = true
+
+    const loadDeliveryZones =
+      async () => {
+        const {
+          data,
+          error,
+        } =
+          await supabase
+            .from(
+              'delivery_zones'
+            )
+            .select(
+              'id, name, description, fee, active, sort_order'
+            )
+            .eq(
+              'active',
+              true
+            )
+            .order(
+              'sort_order',
+              {
+                ascending: true,
+              }
+            )
+
+        if (
+          mounted &&
+          !error
+        ) {
+          setDeliveryZones(
+            data || []
+          )
+
+          if (
+            data?.length ===
+              1
+          ) {
+            setSelectedDeliveryZoneId(
+              String(
+                data[0].id
+              )
+            )
+          }
+        }
+
+        if (error) {
+          console.error(
+            'Could not load delivery zones:',
+            error
+          )
+        }
+      }
+
+    loadDeliveryZones()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const selectedDeliveryZone =
+    deliveryZones.find(
+      (zone) =>
+        String(zone.id) ===
+        String(
+          selectedDeliveryZoneId
+        )
+    )
+
+  const deliveryFee =
+    Number(
+      selectedDeliveryZone?.fee ??
+        0
+    )
+
+  const grandTotal =
+    subtotal + deliveryFee
 
   if (cart.length === 0) {
     return (
@@ -1449,6 +1534,11 @@ function Checkout({
             p_order_note:
               form.note,
 
+            p_delivery_zone_id:
+              Number(
+                selectedDeliveryZoneId
+              ),
+
             p_items:
               items,
           }
@@ -1477,6 +1567,16 @@ function Checkout({
     event.preventDefault()
 
     setPaymentError('')
+
+    if (
+      !selectedDeliveryZoneId
+    ) {
+      setPaymentError(
+        'Please select a delivery option before placing your order.'
+      )
+      return
+    }
+
     setPaymentStarting(true)
 
     try {
@@ -1793,6 +1893,66 @@ function Checkout({
               </div>
 
               <div className="form-field form-field-full">
+                <label htmlFor="delivery-zone">
+                  Delivery option
+                </label>
+
+                <select
+                  id="delivery-zone"
+                  value={
+                    selectedDeliveryZoneId
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setSelectedDeliveryZoneId(
+                      event.target.value
+                    )
+                  }
+                  required
+                >
+                  <option value="">
+                    Select delivery option
+                  </option>
+
+                  {deliveryZones.map(
+                    (zone) => (
+                      <option
+                        key={
+                          zone.id
+                        }
+                        value={
+                          zone.id
+                        }
+                      >
+                        {zone.name} — ₦
+                        {Number(
+                          zone.fee
+                        ).toLocaleString()}
+                      </option>
+                    )
+                  )}
+                </select>
+
+                {selectedDeliveryZone?.description && (
+                  <p
+                    style={{
+                      marginTop:
+                        '8px',
+                      fontSize:
+                        '12px',
+                      color:
+                        '#75616c',
+                    }}
+                  >
+                    {
+                      selectedDeliveryZone.description
+                    }
+                  </p>
+                )}
+              </div>
+
+              <div className="form-field form-field-full">
                 <label htmlFor="note">
                   Order note
                   <span>
@@ -1980,7 +2140,9 @@ function Checkout({
                 </span>
 
                 <span>
-                  Calculated later
+                  {selectedDeliveryZone
+                    ? `₦${deliveryFee.toLocaleString()}`
+                    : 'Select option'}
                 </span>
               </div>
 
@@ -4423,6 +4585,22 @@ function AdminDashboard() {
   const [adminProducts, setAdminProducts] =
     useState([])
 
+  const [
+    deliveryZones,
+    setDeliveryZones,
+  ] = useState([])
+
+  const [
+    newDeliveryZone,
+    setNewDeliveryZone,
+  ] = useState({
+    name: '',
+    description: '',
+    fee: 0,
+    active: true,
+    sort_order: 0,
+  })
+
   const [loadingData, setLoadingData] =
     useState(true)
 
@@ -4475,6 +4653,7 @@ function AdminDashboard() {
         ordersResponse,
         itemsResponse,
         productsResponse,
+        deliveryZonesResponse,
       ] =
         await Promise.all([
           supabase
@@ -4511,12 +4690,27 @@ function AdminDashboard() {
             .order('id', {
               ascending: true,
             }),
+
+          supabase
+            .from(
+              'delivery_zones'
+            )
+            .select(
+              'id, name, description, fee, active, sort_order, created_at, updated_at'
+            )
+            .order(
+              'sort_order',
+              {
+                ascending: true,
+              }
+            ),
         ])
 
       const firstError =
         ordersResponse.error ||
         itemsResponse.error ||
-        productsResponse.error
+        productsResponse.error ||
+        deliveryZonesResponse.error
 
       if (firstError) {
         console.error(
@@ -4552,6 +4746,21 @@ function AdminDashboard() {
             stock_quantity:
               Number(
                 product.stock_quantity
+              ),
+          }))
+      )
+
+      setDeliveryZones(
+        (deliveryZonesResponse.data || [])
+          .map((zone) => ({
+            ...zone,
+            fee:
+              Number(
+                zone.fee
+              ),
+            sort_order:
+              Number(
+                zone.sort_order
               ),
           }))
       )
@@ -4701,6 +4910,187 @@ function AdminDashboard() {
 
       setFeedback(
         'Product updated successfully.'
+      )
+    }
+
+  const createDeliveryZone =
+    async (event) => {
+      event.preventDefault()
+
+      setFeedback('')
+      setErrorMessage('')
+
+      const payload = {
+        name:
+          newDeliveryZone.name.trim(),
+        description:
+          newDeliveryZone.description.trim() ||
+          null,
+        fee:
+          Number(
+            newDeliveryZone.fee
+          ),
+        active:
+          Boolean(
+            newDeliveryZone.active
+          ),
+        sort_order:
+          Number(
+            newDeliveryZone.sort_order
+          ),
+      }
+
+      if (!payload.name) {
+        setErrorMessage(
+          'Delivery option name is required.'
+        )
+        return
+      }
+
+      const {
+        data,
+        error,
+      } =
+        await supabase
+          .from(
+            'delivery_zones'
+          )
+          .insert(payload)
+          .select()
+          .single()
+
+      if (error) {
+        setErrorMessage(
+          error.message
+        )
+        return
+      }
+
+      setDeliveryZones(
+        (current) => [
+          ...current,
+          {
+            ...data,
+            fee:
+              Number(
+                data.fee
+              ),
+            sort_order:
+              Number(
+                data.sort_order
+              ),
+          },
+        ].sort(
+          (a, b) =>
+            a.sort_order -
+            b.sort_order
+        )
+      )
+
+      setNewDeliveryZone({
+        name: '',
+        description: '',
+        fee: 0,
+        active: true,
+        sort_order:
+          deliveryZones.length +
+          1,
+      })
+
+      setFeedback(
+        'Delivery option created successfully.'
+      )
+    }
+
+  const updateDeliveryZone =
+    async (
+      zoneId,
+      changes
+    ) => {
+      setFeedback('')
+      setErrorMessage('')
+
+      const { error } =
+        await supabase
+          .from(
+            'delivery_zones'
+          )
+          .update(changes)
+          .eq(
+            'id',
+            zoneId
+          )
+
+      if (error) {
+        setErrorMessage(
+          error.message
+        )
+        return
+      }
+
+      setDeliveryZones(
+        (current) =>
+          current.map(
+            (zone) =>
+              zone.id === zoneId
+                ? {
+                    ...zone,
+                    ...changes,
+                  }
+                : zone
+          )
+      )
+
+      setFeedback(
+        'Delivery option updated successfully.'
+      )
+    }
+
+  const deleteDeliveryZone =
+    async (
+      zoneId
+    ) => {
+      const confirmed =
+        window.confirm(
+          'Delete this delivery option? Existing orders will keep their saved delivery fee/name.'
+        )
+
+      if (!confirmed) {
+        return
+      }
+
+      setFeedback('')
+      setErrorMessage('')
+
+      const { error } =
+        await supabase
+          .from(
+            'delivery_zones'
+          )
+          .delete()
+          .eq(
+            'id',
+            zoneId
+          )
+
+      if (error) {
+        setErrorMessage(
+          error.message
+        )
+        return
+      }
+
+      setDeliveryZones(
+        (current) =>
+          current.filter(
+            (zone) =>
+              zone.id !==
+              zoneId
+          )
+      )
+
+      setFeedback(
+        'Delivery option deleted.'
       )
     }
 
@@ -4872,6 +5262,23 @@ function AdminDashboard() {
             }
           >
             Products & Stock
+          </button>
+
+          <button
+            type="button"
+            className={
+              activeTab ===
+              'delivery'
+                ? 'peng-admin-tab active'
+                : 'peng-admin-tab'
+            }
+            onClick={() =>
+              setActiveTab(
+                'delivery'
+              )
+            }
+          >
+            Delivery Rates
           </button>
 
           <button
@@ -5154,6 +5561,392 @@ function AdminDashboard() {
                     </div>
                   )
                 }
+              )
+            )}
+          </div>
+        ) : activeTab === 'delivery' ? (
+          <div className="peng-admin-grid">
+            <form
+              className="peng-admin-card peng-admin-order"
+              onSubmit={
+                createDeliveryZone
+              }
+            >
+              <div className="peng-admin-order-head">
+                <div>
+                  <div className="peng-admin-order-number">
+                    Add delivery option
+                  </div>
+
+                  <div className="peng-admin-muted">
+                    Create a delivery zone, pickup option, or regional rate.
+                  </div>
+                </div>
+              </div>
+
+              <div className="peng-admin-order-meta">
+                <div className="peng-admin-field">
+                  <label>
+                    Name
+                  </label>
+
+                  <input
+                    value={
+                      newDeliveryZone.name
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setNewDeliveryZone(
+                        (
+                          current
+                        ) => ({
+                          ...current,
+                          name:
+                            event
+                              .target
+                              .value,
+                        })
+                      )
+                    }
+                    placeholder="e.g. Lagos Mainland"
+                    required
+                  />
+                </div>
+
+                <div className="peng-admin-field">
+                  <label>
+                    Fee (₦)
+                  </label>
+
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    value={
+                      newDeliveryZone.fee
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setNewDeliveryZone(
+                        (
+                          current
+                        ) => ({
+                          ...current,
+                          fee:
+                            Number(
+                              event
+                                .target
+                                .value
+                            ),
+                        })
+                      )
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="peng-admin-field">
+                  <label>
+                    Sort order
+                  </label>
+
+                  <input
+                    type="number"
+                    min="0"
+                    value={
+                      newDeliveryZone.sort_order
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setNewDeliveryZone(
+                        (
+                          current
+                        ) => ({
+                          ...current,
+                          sort_order:
+                            Number(
+                              event
+                                .target
+                                .value
+                            ),
+                        })
+                      )
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="peng-admin-field">
+                <label>
+                  Description
+                </label>
+
+                <input
+                  value={
+                    newDeliveryZone.description
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setNewDeliveryZone(
+                      (
+                        current
+                      ) => ({
+                        ...current,
+                        description:
+                          event
+                            .target
+                            .value,
+                      })
+                    )
+                  }
+                  placeholder="Optional note shown at checkout"
+                />
+              </div>
+
+              <label
+                style={{
+                  display: 'flex',
+                  gap: 8,
+                  alignItems:
+                    'center',
+                  marginTop: 16,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={
+                    newDeliveryZone.active
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setNewDeliveryZone(
+                      (
+                        current
+                      ) => ({
+                        ...current,
+                        active:
+                          event
+                            .target
+                            .checked,
+                      })
+                    )
+                  }
+                />
+                Active
+              </label>
+
+              <button
+                type="submit"
+                className="peng-admin-primary"
+                style={{
+                  marginTop: 18,
+                }}
+              >
+                Add Delivery Option
+              </button>
+            </form>
+
+            {deliveryZones.length === 0 ? (
+              <div className="peng-admin-card peng-admin-empty">
+                No delivery options yet. Add the store's real rates above.
+              </div>
+            ) : (
+              deliveryZones.map(
+                (zone) => (
+                  <div
+                    key={
+                      zone.id
+                    }
+                    className="peng-admin-card peng-admin-order"
+                  >
+                    <div className="peng-admin-order-head">
+                      <div>
+                        <div className="peng-admin-order-number">
+                          {
+                            zone.name
+                          }
+                        </div>
+
+                        <div className="peng-admin-muted">
+                          {zone.description ||
+                            'No description'}
+                        </div>
+                      </div>
+
+                      <strong>
+                        ₦
+                        {Number(
+                          zone.fee
+                        ).toLocaleString()}
+                      </strong>
+                    </div>
+
+                    <div className="peng-admin-actions">
+                      <div className="peng-admin-field">
+                        <label>
+                          Fee
+                        </label>
+
+                        <input
+                          type="number"
+                          min="0"
+                          step="100"
+                          value={
+                            zone.fee
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setDeliveryZones(
+                              (
+                                current
+                              ) =>
+                                current.map(
+                                  (
+                                    item
+                                  ) =>
+                                    item.id ===
+                                    zone.id
+                                      ? {
+                                          ...item,
+                                          fee:
+                                            Number(
+                                              event
+                                                .target
+                                                .value
+                                            ),
+                                        }
+                                      : item
+                                )
+                            )
+                          }
+                          onBlur={() =>
+                            updateDeliveryZone(
+                              zone.id,
+                              {
+                                fee:
+                                  Number(
+                                    zone.fee
+                                  ),
+                              }
+                            )
+                          }
+                        />
+                      </div>
+
+                      <div className="peng-admin-field">
+                        <label>
+                          Sort
+                        </label>
+
+                        <input
+                          type="number"
+                          min="0"
+                          value={
+                            zone.sort_order
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setDeliveryZones(
+                              (
+                                current
+                              ) =>
+                                current.map(
+                                  (
+                                    item
+                                  ) =>
+                                    item.id ===
+                                    zone.id
+                                      ? {
+                                          ...item,
+                                          sort_order:
+                                            Number(
+                                              event
+                                                .target
+                                                .value
+                                            ),
+                                        }
+                                      : item
+                                )
+                            )
+                          }
+                          onBlur={() =>
+                            updateDeliveryZone(
+                              zone.id,
+                              {
+                                sort_order:
+                                  Number(
+                                    zone.sort_order
+                                  ),
+                              }
+                            )
+                          }
+                        />
+                      </div>
+
+                      <div
+                        style={{
+                          display:
+                            'flex',
+                          gap: 8,
+                          alignItems:
+                            'end',
+                        }}
+                      >
+                        <label
+                          style={{
+                            display:
+                              'flex',
+                            gap: 6,
+                            alignItems:
+                              'center',
+                            paddingBottom:
+                              10,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={
+                              zone.active
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              updateDeliveryZone(
+                                zone.id,
+                                {
+                                  active:
+                                    event
+                                      .target
+                                      .checked,
+                                }
+                              )
+                            }
+                          />
+                          Active
+                        </label>
+
+                        <button
+                          type="button"
+                          className="peng-admin-danger"
+                          onClick={() =>
+                            deleteDeliveryZone(
+                              zone.id
+                            )
+                          }
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
               )
             )}
           </div>
