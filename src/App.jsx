@@ -1330,7 +1330,7 @@ function Checkout({
               'delivery_zones'
             )
             .select(
-              'id, name, description, fee, active, sort_order'
+              'id, name, description, fee, active, sort_order, pricing_mode, is_pickup, pickup_location'
             )
             .eq(
               'active',
@@ -1387,11 +1387,23 @@ function Checkout({
         )
     )
 
-  const deliveryFee =
-    Number(
-      selectedDeliveryZone?.fee ??
-        0
+  const deliveryPricingMode =
+    selectedDeliveryZone?.pricing_mode ||
+    'fixed'
+
+  const isPickup =
+    Boolean(
+      selectedDeliveryZone?.is_pickup
     )
+
+  const deliveryFee =
+    deliveryPricingMode ===
+      'contact'
+      ? 0
+      : Number(
+          selectedDeliveryZone?.fee ??
+            0
+        )
 
   const grandTotal =
     subtotal + deliveryFee
@@ -1505,7 +1517,12 @@ function Checkout({
       }
 
       const deliveryAddress =
-        `${form.address}, ${form.city}, ${form.state}`
+        isPickup
+          ? `Pickup: ${
+              selectedDeliveryZone?.pickup_location ||
+              ''
+            }`
+          : `${form.address}, ${form.city}, ${form.state}`
 
       const items =
         cart.map((item) => ({
@@ -1577,6 +1594,30 @@ function Checkout({
       return
     }
 
+    if (
+      isPickup &&
+      !selectedDeliveryZone?.pickup_location
+    ) {
+      setPaymentError(
+        'This pickup option is missing a pickup location. Please contact PENGSTORES.'
+      )
+      return
+    }
+
+    if (
+      !isPickup &&
+      (
+        !form.address.trim() ||
+        !form.city.trim() ||
+        !form.state.trim()
+      )
+    ) {
+      setPaymentError(
+        'Please complete your delivery address, city and state.'
+      )
+      return
+    }
+
     setPaymentStarting(true)
 
     try {
@@ -1588,6 +1629,21 @@ function Checkout({
       const reference =
         order?.order_number ||
         `PENG-${Date.now()}`
+
+      if (
+        deliveryPricingMode ===
+        'contact'
+      ) {
+        setPaymentStarting(false)
+
+        navigate(
+          `/order-confirmed?reference=${encodeURIComponent(
+            reference
+          )}`
+        )
+
+        return
+      }
 
       if (!paystackPublicKey) {
         setPaymentStarting(false)
@@ -1832,6 +1888,8 @@ function Checkout({
             </div>
 
             <div className="form-grid">
+              {!isPickup && (
+                <>
               <div className="form-field form-field-full">
                 <label htmlFor="address">
                   Delivery address
@@ -1892,6 +1950,9 @@ function Checkout({
                 />
               </div>
 
+                </>
+              )}
+
               <div className="form-field form-field-full">
                 <label htmlFor="delivery-zone">
                   Delivery option
@@ -1925,10 +1986,19 @@ function Checkout({
                           zone.id
                         }
                       >
-                        {zone.name} — ₦
-                        {Number(
-                          zone.fee
-                        ).toLocaleString()}
+                        {zone.name}
+                        {' — '}
+                        {zone.pricing_mode ===
+                        'contact'
+                          ? 'Contact us for price'
+                          : zone.is_pickup &&
+                            Number(
+                              zone.fee
+                            ) === 0
+                          ? 'Free pickup'
+                          : `₦${Number(
+                              zone.fee
+                            ).toLocaleString()}`}
                       </option>
                     )
                   )}
@@ -1948,6 +2018,45 @@ function Checkout({
                     {
                       selectedDeliveryZone.description
                     }
+                  </p>
+                )}
+
+                {isPickup &&
+                  selectedDeliveryZone?.pickup_location && (
+                    <p
+                      style={{
+                        marginTop:
+                          '8px',
+                        fontSize:
+                          '12px',
+                        fontWeight:
+                          800,
+                        color:
+                          '#6c3650',
+                      }}
+                    >
+                      Pickup location:{' '}
+                      {
+                        selectedDeliveryZone.pickup_location
+                      }
+                    </p>
+                  )}
+
+                {deliveryPricingMode ===
+                  'contact' && (
+                  <p
+                    style={{
+                      marginTop:
+                        '8px',
+                      fontSize:
+                        '12px',
+                      fontWeight:
+                        800,
+                      color:
+                        '#8a4c20',
+                    }}
+                  >
+                    The store will confirm the delivery price before payment.
                   </p>
                 )}
               </div>
@@ -2028,6 +2137,9 @@ function Checkout({
             >
               {paymentStarting
                 ? 'Saving Order...'
+                : deliveryPricingMode ===
+                  'contact'
+                ? 'Request Delivery Quote ↗'
                 : paystackPublicKey
                 ? `Pay ₦${grandTotal.toLocaleString()} ↗`
                 : 'Place Order ↗'}
@@ -2141,14 +2253,24 @@ function Checkout({
 
                 <span>
                   {selectedDeliveryZone
-                    ? `₦${deliveryFee.toLocaleString()}`
+                    ? deliveryPricingMode ===
+                      'contact'
+                      ? 'Contact us'
+                      : deliveryFee ===
+                          0 &&
+                        isPickup
+                      ? 'Free'
+                      : `₦${deliveryFee.toLocaleString()}`
                     : 'Select option'}
                 </span>
               </div>
 
               <div className="summary-row grand-total-row">
                 <span>
-                  Total
+                  {deliveryPricingMode ===
+                  'contact'
+                    ? 'Product subtotal'
+                    : 'Total'}
                 </span>
 
                 <strong>
@@ -2156,6 +2278,15 @@ function Checkout({
                   {grandTotal.toLocaleString()}
                 </strong>
               </div>
+
+              {deliveryPricingMode ===
+                'contact' && (
+                <p
+                  className="secure-checkout-note"
+                >
+                  Delivery is not included yet. PENGSTORES will confirm the delivery quote before payment.
+                </p>
+              )}
             </div>
 
             <p className="secure-checkout-note">
@@ -4614,6 +4745,12 @@ function AdminDashboard() {
     fee: 0,
     active: true,
     sort_order: 0,
+    pricing_mode:
+      'fixed',
+    is_pickup:
+      false,
+    pickup_location:
+      '',
   })
 
   const [loadingData, setLoadingData] =
@@ -4674,7 +4811,7 @@ function AdminDashboard() {
           supabase
             .from('orders')
             .select(
-              'id, order_number, customer_name, customer_email, customer_phone, delivery_address, order_note, subtotal, delivery_fee, total, payment_status, order_status, paystack_reference, created_at, updated_at'
+              'id, order_number, customer_name, customer_email, customer_phone, delivery_address, order_note, delivery_zone_name, delivery_pricing_mode, subtotal, delivery_fee, total, payment_status, order_status, paystack_reference, created_at, updated_at'
             )
             .order(
               'created_at',
@@ -4711,7 +4848,7 @@ function AdminDashboard() {
               'delivery_zones'
             )
             .select(
-              'id, name, description, fee, active, sort_order, created_at, updated_at'
+              'id, name, description, fee, active, sort_order, pricing_mode, is_pickup, pickup_location, created_at, updated_at'
             )
             .order(
               'sort_order',
@@ -4953,11 +5090,34 @@ function AdminDashboard() {
           Number(
             newDeliveryZone.sort_order
           ),
+        pricing_mode:
+          newDeliveryZone.pricing_mode,
+        is_pickup:
+          Boolean(
+            newDeliveryZone.is_pickup
+          ),
+        pickup_location:
+          newDeliveryZone.is_pickup
+            ? (
+                newDeliveryZone.pickup_location.trim() ||
+                null
+              )
+            : null,
       }
 
       if (!payload.name) {
         setErrorMessage(
           'Delivery option name is required.'
+        )
+        return
+      }
+
+      if (
+        payload.is_pickup &&
+        !payload.pickup_location
+      ) {
+        setErrorMessage(
+          'Pickup location is required when Pickup is enabled.'
         )
         return
       }
@@ -5010,6 +5170,12 @@ function AdminDashboard() {
         sort_order:
           deliveryZones.length +
           1,
+        pricing_mode:
+          'fixed',
+        is_pickup:
+          false,
+        pickup_location:
+          '',
       })
 
       setFeedback(
@@ -5744,11 +5910,33 @@ function AdminDashboard() {
                             Delivery
                           </small>
 
+                          {order.delivery_zone_name && (
+                            <div
+                              style={{
+                                fontWeight:
+                                  800,
+                                marginBottom:
+                                  6,
+                              }}
+                            >
+                              {
+                                order.delivery_zone_name
+                              }
+                            </div>
+                          )}
+
                           <div>
                             {
                               order.delivery_address
                             }
                           </div>
+
+                          {order.delivery_pricing_mode ===
+                            'contact' && (
+                            <div className="peng-admin-muted">
+                              Delivery fee: quote required
+                            </div>
+                          )}
 
                           {order.order_note && (
                             <div className="peng-admin-muted">
@@ -6271,6 +6459,10 @@ function AdminDashboard() {
                       )
                     }
                     required
+                    disabled={
+                      newDeliveryZone.pricing_mode ===
+                      'contact'
+                    }
                   />
                 </div>
 
@@ -6332,6 +6524,110 @@ function AdminDashboard() {
                   }
                   placeholder="Optional note shown at checkout"
                 />
+              </div>
+
+              <div className="peng-admin-order-meta">
+                <div className="peng-admin-field">
+                  <label>
+                    Pricing
+                  </label>
+
+                  <select
+                    value={
+                      newDeliveryZone.pricing_mode
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setNewDeliveryZone(
+                        (
+                          current
+                        ) => ({
+                          ...current,
+                          pricing_mode:
+                            event
+                              .target
+                              .value,
+                        })
+                      )
+                    }
+                  >
+                    <option value="fixed">
+                      Fixed price
+                    </option>
+                    <option value="contact">
+                      Contact us for price
+                    </option>
+                  </select>
+                </div>
+
+                <div className="peng-admin-field">
+                  <label>
+                    Pickup option
+                  </label>
+
+                  <select
+                    value={
+                      newDeliveryZone.is_pickup
+                        ? 'yes'
+                        : 'no'
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setNewDeliveryZone(
+                        (
+                          current
+                        ) => ({
+                          ...current,
+                          is_pickup:
+                            event
+                              .target
+                              .value ===
+                            'yes',
+                        })
+                      )
+                    }
+                  >
+                    <option value="no">
+                      No
+                    </option>
+                    <option value="yes">
+                      Yes
+                    </option>
+                  </select>
+                </div>
+
+                <div className="peng-admin-field">
+                  <label>
+                    Pickup location
+                  </label>
+
+                  <input
+                    value={
+                      newDeliveryZone.pickup_location
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setNewDeliveryZone(
+                        (
+                          current
+                        ) => ({
+                          ...current,
+                          pickup_location:
+                            event
+                              .target
+                              .value,
+                        })
+                      )
+                    }
+                    placeholder="Required only for pickup"
+                    disabled={
+                      !newDeliveryZone.is_pickup
+                    }
+                  />
+                </div>
               </div>
 
               <label
@@ -6406,14 +6702,54 @@ function AdminDashboard() {
                       </div>
 
                       <strong>
-                        ₦
-                        {Number(
-                          zone.fee
-                        ).toLocaleString()}
+                        {zone.pricing_mode ===
+                        'contact'
+                          ? 'Contact for price'
+                          : zone.is_pickup &&
+                            Number(
+                              zone.fee
+                            ) === 0
+                          ? 'Free pickup'
+                          : `₦${Number(
+                              zone.fee
+                            ).toLocaleString()}`}
                       </strong>
                     </div>
 
                     <div className="peng-admin-actions">
+                      <div className="peng-admin-field">
+                        <label>
+                          Pricing
+                        </label>
+
+                        <select
+                          value={
+                            zone.pricing_mode ||
+                            'fixed'
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            updateDeliveryZone(
+                              zone.id,
+                              {
+                                pricing_mode:
+                                  event
+                                    .target
+                                    .value,
+                              }
+                            )
+                          }
+                        >
+                          <option value="fixed">
+                            Fixed price
+                          </option>
+                          <option value="contact">
+                            Contact us
+                          </option>
+                        </select>
+                      </div>
+
                       <div className="peng-admin-field">
                         <label>
                           Fee
@@ -6462,6 +6798,10 @@ function AdminDashboard() {
                                   ),
                               }
                             )
+                          }
+                          disabled={
+                            zone.pricing_mode ===
+                            'contact'
                           }
                         />
                       </div>
@@ -6513,6 +6853,95 @@ function AdminDashboard() {
                                   ),
                               }
                             )
+                          }
+                        />
+                      </div>
+
+                      <div className="peng-admin-field">
+                        <label>
+                          Pickup
+                        </label>
+
+                        <select
+                          value={
+                            zone.is_pickup
+                              ? 'yes'
+                              : 'no'
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            updateDeliveryZone(
+                              zone.id,
+                              {
+                                is_pickup:
+                                  event
+                                    .target
+                                    .value ===
+                                  'yes',
+                              }
+                            )
+                          }
+                        >
+                          <option value="no">
+                            No
+                          </option>
+                          <option value="yes">
+                            Yes
+                          </option>
+                        </select>
+                      </div>
+
+                      <div className="peng-admin-field">
+                        <label>
+                          Pickup location
+                        </label>
+
+                        <input
+                          value={
+                            zone.pickup_location ||
+                            ''
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setDeliveryZones(
+                              (
+                                current
+                              ) =>
+                                current.map(
+                                  (
+                                    item
+                                  ) =>
+                                    item.id ===
+                                    zone.id
+                                      ? {
+                                          ...item,
+                                          pickup_location:
+                                            event
+                                              .target
+                                              .value,
+                                        }
+                                      : item
+                                )
+                            )
+                          }
+                          onBlur={() =>
+                            updateDeliveryZone(
+                              zone.id,
+                              {
+                                pickup_location:
+                                  zone.is_pickup
+                                    ? (
+                                        zone.pickup_location ||
+                                        null
+                                      )
+                                    : null,
+                              }
+                            )
+                          }
+                          disabled={
+                            !zone.is_pickup
                           }
                         />
                       </div>
