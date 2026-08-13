@@ -4136,7 +4136,7 @@ const ADMIN_STYLES = `
 
   .peng-admin-stats {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 14px;
     margin-bottom: 22px;
   }
@@ -4575,6 +4575,21 @@ function AdminDashboard() {
 
   const [activeTab, setActiveTab] =
     useState('orders')
+
+  const [
+    orderSearch,
+    setOrderSearch,
+  ] = useState('')
+
+  const [
+    orderStatusFilter,
+    setOrderStatusFilter,
+  ] = useState('all')
+
+  const [
+    paymentStatusFilter,
+    setPaymentStatusFilter,
+  ] = useState('all')
 
   const [orders, setOrders] =
     useState([])
@@ -5138,6 +5153,163 @@ function AdminDashboard() {
         5
     ).length
 
+  const paidRevenue =
+    orders
+      .filter(
+        (order) =>
+          order.payment_status ===
+          'paid'
+      )
+      .reduce(
+        (total, order) =>
+          total +
+          Number(
+            order.total || 0
+          ),
+        0
+      )
+
+  const deliveredRevenue =
+    orders
+      .filter(
+        (order) =>
+          order.payment_status ===
+            'paid' &&
+          order.order_status ===
+            'delivered'
+      )
+      .reduce(
+        (total, order) =>
+          total +
+          Number(
+            order.total || 0
+          ),
+        0
+      )
+
+  const customersMap =
+    new Map()
+
+  orders.forEach(
+    (order) => {
+      const key =
+        order.customer_email ||
+        order.customer_phone ||
+        order.customer_name
+
+      if (
+        !customersMap.has(key)
+      ) {
+        customersMap.set(
+          key,
+          {
+            key,
+            name:
+              order.customer_name,
+            email:
+              order.customer_email,
+            phone:
+              order.customer_phone,
+            orderCount: 0,
+            totalSpent: 0,
+            lastOrder:
+              order.created_at,
+          }
+        )
+      }
+
+      const customer =
+        customersMap.get(key)
+
+      customer.orderCount += 1
+
+      if (
+        order.payment_status ===
+        'paid'
+      ) {
+        customer.totalSpent +=
+          Number(
+            order.total || 0
+          )
+      }
+
+      if (
+        new Date(
+          order.created_at
+        ) >
+        new Date(
+          customer.lastOrder
+        )
+      ) {
+        customer.lastOrder =
+          order.created_at
+      }
+    }
+  )
+
+  const customers =
+    Array.from(
+      customersMap.values()
+    ).sort(
+      (a, b) =>
+        b.totalSpent -
+        a.totalSpent
+    )
+
+  const filteredOrders =
+    orders.filter(
+      (order) => {
+        const q =
+          orderSearch
+            .trim()
+            .toLowerCase()
+
+        const matchesSearch =
+          !q ||
+          [
+            order.order_number,
+            order.customer_name,
+            order.customer_email,
+            order.customer_phone,
+            order.delivery_address,
+          ]
+            .filter(Boolean)
+            .some(
+              (value) =>
+                String(value)
+                  .toLowerCase()
+                  .includes(q)
+            )
+
+        const matchesOrderStatus =
+          orderStatusFilter ===
+            'all' ||
+          order.order_status ===
+            orderStatusFilter
+
+        const matchesPaymentStatus =
+          paymentStatusFilter ===
+            'all' ||
+          order.payment_status ===
+            paymentStatusFilter
+
+        return (
+          matchesSearch &&
+          matchesOrderStatus &&
+          matchesPaymentStatus
+        )
+      }
+    )
+
+  const recentPaidOrders =
+    orders
+      .filter(
+        (order) =>
+          order.payment_status ===
+          'paid'
+      )
+      .slice(0, 5)
+
   return (
     <div className="peng-admin-shell">
       <style>{ADMIN_STYLES}</style>
@@ -5221,6 +5393,30 @@ function AdminDashboard() {
 
           <div className="peng-admin-card peng-admin-stat">
             <span>
+              Customers
+            </span>
+            <strong>
+              {customers.length}
+            </strong>
+          </div>
+
+          <div className="peng-admin-card peng-admin-stat">
+            <span>
+              Paid revenue
+            </span>
+            <strong
+              style={{
+                fontSize:
+                  '22px',
+              }}
+            >
+              ₦
+              {paidRevenue.toLocaleString()}
+            </strong>
+          </div>
+
+          <div className="peng-admin-card peng-admin-stat">
+            <span>
               Low stock
             </span>
             <strong>
@@ -5262,6 +5458,40 @@ function AdminDashboard() {
             }
           >
             Products & Stock
+          </button>
+
+          <button
+            type="button"
+            className={
+              activeTab ===
+              'analytics'
+                ? 'peng-admin-tab active'
+                : 'peng-admin-tab'
+            }
+            onClick={() =>
+              setActiveTab(
+                'analytics'
+              )
+            }
+          >
+            Analytics
+          </button>
+
+          <button
+            type="button"
+            className={
+              activeTab ===
+              'customers'
+                ? 'peng-admin-tab active'
+                : 'peng-admin-tab'
+            }
+            onClick={() =>
+              setActiveTab(
+                'customers'
+              )
+            }
+          >
+            Customers
           </button>
 
           <button
@@ -5310,12 +5540,140 @@ function AdminDashboard() {
           </div>
         ) : activeTab === 'orders' ? (
           <div className="peng-admin-grid">
-            {orders.length === 0 ? (
+            <div className="peng-admin-card peng-admin-order">
+              <div className="peng-admin-order-head">
+                <div>
+                  <div className="peng-admin-order-number">
+                    Find orders
+                  </div>
+
+                  <div className="peng-admin-muted">
+                    Search by order number, customer, phone, email or address.
+                  </div>
+                </div>
+
+                <strong>
+                  {filteredOrders.length}
+                  {' '}
+                  result
+                  {filteredOrders.length ===
+                  1
+                    ? ''
+                    : 's'}
+                </strong>
+              </div>
+
+              <div className="peng-admin-order-meta">
+                <div className="peng-admin-field">
+                  <label>
+                    Search
+                  </label>
+
+                  <input
+                    value={
+                      orderSearch
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setOrderSearch(
+                        event
+                          .target
+                          .value
+                      )
+                    }
+                    placeholder="PENG-, customer, phone..."
+                  />
+                </div>
+
+                <div className="peng-admin-field">
+                  <label>
+                    Order status
+                  </label>
+
+                  <select
+                    value={
+                      orderStatusFilter
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setOrderStatusFilter(
+                        event
+                          .target
+                          .value
+                      )
+                    }
+                  >
+                    <option value="all">
+                      All
+                    </option>
+                    <option value="pending">
+                      Pending
+                    </option>
+                    <option value="confirmed">
+                      Confirmed
+                    </option>
+                    <option value="processing">
+                      Processing
+                    </option>
+                    <option value="shipped">
+                      Shipped
+                    </option>
+                    <option value="delivered">
+                      Delivered
+                    </option>
+                    <option value="cancelled">
+                      Cancelled
+                    </option>
+                  </select>
+                </div>
+
+                <div className="peng-admin-field">
+                  <label>
+                    Payment status
+                  </label>
+
+                  <select
+                    value={
+                      paymentStatusFilter
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setPaymentStatusFilter(
+                        event
+                          .target
+                          .value
+                      )
+                    }
+                  >
+                    <option value="all">
+                      All
+                    </option>
+                    <option value="pending">
+                      Pending
+                    </option>
+                    <option value="paid">
+                      Paid
+                    </option>
+                    <option value="failed">
+                      Failed
+                    </option>
+                    <option value="refunded">
+                      Refunded
+                    </option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {filteredOrders.length === 0 ? (
               <div className="peng-admin-card peng-admin-empty">
                 No orders yet.
               </div>
             ) : (
-              orders.map(
+              filteredOrders.map(
                 (order) => {
                   const items =
                     orderItems.filter(
@@ -5561,6 +5919,275 @@ function AdminDashboard() {
                     </div>
                   )
                 }
+              )
+            )}
+          </div>
+        ) : activeTab === 'analytics' ? (
+          <div className="peng-admin-grid">
+            <div className="peng-admin-card peng-admin-order">
+              <div className="peng-admin-order-head">
+                <div>
+                  <div className="peng-admin-order-number">
+                    Revenue overview
+                  </div>
+
+                  <div className="peng-admin-muted">
+                    Revenue is calculated from orders marked Paid.
+                  </div>
+                </div>
+              </div>
+
+              <div className="peng-admin-order-meta">
+                <div className="peng-admin-meta-box">
+                  <small>
+                    Paid revenue
+                  </small>
+
+                  <strong>
+                    ₦
+                    {paidRevenue.toLocaleString()}
+                  </strong>
+                </div>
+
+                <div className="peng-admin-meta-box">
+                  <small>
+                    Delivered revenue
+                  </small>
+
+                  <strong>
+                    ₦
+                    {deliveredRevenue.toLocaleString()}
+                  </strong>
+                </div>
+
+                <div className="peng-admin-meta-box">
+                  <small>
+                    Average paid order
+                  </small>
+
+                  <strong>
+                    ₦
+                    {(
+                      paidOrders
+                        ? Math.round(
+                            paidRevenue /
+                            paidOrders
+                          )
+                        : 0
+                    ).toLocaleString()}
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            <div className="peng-admin-card peng-admin-order">
+              <div className="peng-admin-order-head">
+                <div>
+                  <div className="peng-admin-order-number">
+                    Recent paid orders
+                  </div>
+
+                  <div className="peng-admin-muted">
+                    Quick view of the latest successful orders.
+                  </div>
+                </div>
+              </div>
+
+              <div className="peng-admin-items">
+                {recentPaidOrders.length ===
+                0 ? (
+                  <div className="peng-admin-muted">
+                    No paid orders yet.
+                  </div>
+                ) : (
+                  recentPaidOrders.map(
+                    (order) => (
+                      <div
+                        key={
+                          order.id
+                        }
+                        className="peng-admin-item"
+                      >
+                        <span>
+                          {
+                            order.order_number
+                          }
+                          {' — '}
+                          {
+                            order.customer_name
+                          }
+                        </span>
+
+                        <strong>
+                          ₦
+                          {Number(
+                            order.total
+                          ).toLocaleString()}
+                        </strong>
+                      </div>
+                    )
+                  )
+                )}
+              </div>
+            </div>
+
+            <div className="peng-admin-card peng-admin-order">
+              <div className="peng-admin-order-head">
+                <div>
+                  <div className="peng-admin-order-number">
+                    Inventory alerts
+                  </div>
+
+                  <div className="peng-admin-muted">
+                    Products with five units or fewer.
+                  </div>
+                </div>
+              </div>
+
+              <div className="peng-admin-items">
+                {adminProducts
+                  .filter(
+                    (product) =>
+                      product.stock_quantity <=
+                      5
+                  )
+                  .sort(
+                    (a, b) =>
+                      a.stock_quantity -
+                      b.stock_quantity
+                  )
+                  .map(
+                    (product) => (
+                      <div
+                        key={
+                          product.id
+                        }
+                        className="peng-admin-item"
+                      >
+                        <span>
+                          {
+                            product.name
+                          }
+                        </span>
+
+                        <strong>
+                          {
+                            product.stock_quantity
+                          }
+                          {' '}
+                          left
+                        </strong>
+                      </div>
+                    )
+                  )}
+              </div>
+            </div>
+          </div>
+        ) : activeTab === 'customers' ? (
+          <div className="peng-admin-grid">
+            {customers.length === 0 ? (
+              <div className="peng-admin-card peng-admin-empty">
+                No customer history yet.
+              </div>
+            ) : (
+              customers.map(
+                (customer) => (
+                  <div
+                    key={
+                      customer.key
+                    }
+                    className="peng-admin-card peng-admin-order"
+                  >
+                    <div className="peng-admin-order-head">
+                      <div>
+                        <div className="peng-admin-order-number">
+                          {
+                            customer.name
+                          }
+                        </div>
+
+                        <div className="peng-admin-muted">
+                          {
+                            customer.email
+                          }
+                        </div>
+
+                        <div className="peng-admin-muted">
+                          {
+                            customer.phone
+                          }
+                        </div>
+                      </div>
+
+                      <div>
+                        <strong>
+                          ₦
+                          {customer.totalSpent.toLocaleString()}
+                        </strong>
+
+                        <div className="peng-admin-muted">
+                          {
+                            customer.orderCount
+                          }
+                          {' '}
+                          order
+                          {customer.orderCount ===
+                          1
+                            ? ''
+                            : 's'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="peng-admin-actions">
+                      <div className="peng-admin-meta-box">
+                        <small>
+                          Last order
+                        </small>
+
+                        <strong>
+                          {new Date(
+                            customer.lastOrder
+                          ).toLocaleDateString()}
+                        </strong>
+                      </div>
+
+                      <a
+                        className="peng-admin-primary"
+                        href={`https://wa.me/${String(
+                          customer.phone ||
+                          ''
+                        ).replace(
+                          /\D/g,
+                          ''
+                        )}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          textDecoration:
+                            'none',
+                          textAlign:
+                            'center',
+                        }}
+                      >
+                        WhatsApp
+                      </a>
+
+                      <a
+                        className="peng-admin-secondary"
+                        href={`mailto:${customer.email}`}
+                        style={{
+                          textDecoration:
+                            'none',
+                          textAlign:
+                            'center',
+                        }}
+                      >
+                        Email
+                      </a>
+                    </div>
+                  </div>
+                )
               )
             )}
           </div>
